@@ -1,73 +1,38 @@
-import express, { Request, Response } from "express";
-import multer from "multer";
-import cloudinary from "cloudinary";
-import Hotel, { HotelType } from "../models/hotel";
-import verifyToken from "../middleware/auth";
-import { body } from "express-validator";
+import mongoose from "mongoose";
 
-const router = express.Router();
+export type HotelType = {
+    _id: string;
+    userId: string;
+    name: string;
+    city: string;
+    country: string;
+    description: string;
+    type: string;
+    adultCount: number;
+    childCount: number;
+    facilities: string[];
+    pricePerNight: number;
+    starRating: number;
+    imageUrls: String[];
+    lastUpdated : Date;
+}
 
-//imgs we get from push request in memory 
-const storage = multer.memoryStorage(); 
-const upload = multer({
-    storage: storage,
-    limits:{
-        fileSize: 5 * 1024 * 1024 //5mb
-    }
-})
+const hotelSchema = new mongoose.Schema<HotelType>({
+  userId: { type: String, required: true },
+  name: { type: String, required: true },
+  city: { type: String, required: true },
+  country: { type: String, required: true },
+  description: { type: String, required: true },
+  type: { type: String, required: true },
+  adultCount: { type: Number, required: true },
+  childCount: { type: Number, required: true },
+  facilities: [{ type: String, required: true }],
+  pricePerNight: { type: Number, required: true },
+  starRating: { type: Number, required: true, min: 1, max: 5 },
+  imageUrls: [{ type: String, required: true }],
+  lastUpdated: { type: Date, required: true },
+});
 
-// api/my-hotels
-router.post(
-"/", 
-verifyToken, [
-    body("name").notEmpty().withMessage("Name is required"),
-    body("city").notEmpty().withMessage("City is required"),
-    body("country").notEmpty().withMessage("Country is required"),
-    body("description").notEmpty().withMessage("Description is required"),
-    body("type").notEmpty().withMessage("Hotel type is required"),
-    body("pricePerNight")
-    .notEmpty()
-    .isNumeric()
-    .withMessage("Price per night is required and must be a number"),
-  body("facilities")
-    .notEmpty()
-    .isArray()
-    .withMessage("Facilities are required"),
-],
-upload.array("imageFiles",6), 
-async (req: Request, res: Response)  => {
-    try{
-        const imageFiles = req.files as Express.Multer.File[];
-        const newHotel : HotelType = req.body;
-
-    //1.Upload the imgs to cloudinary
-
-const uploadPromises = imageFiles.map(async(image)=>{
-    const b64 = Buffer.from(image.buffer).toString("base64")
-    let dataURI= "data:" + image.mimetype + ";base64," + b64;
-    const res= await cloudinary.v2.uploader.upload(dataURI);
-    return res.url;
-})
-
-const imageUrls = await Promise.all(uploadPromises);
-newHotel.imageUrls = imageUrls;
-newHotel.lastUpdated = new Date();
-newHotel.userId = req.userId;
-
-    //2. if upload was successful, add the Urls to hte new hotel
-
-    //3save the new hotel in our database 
-    const hotel = new Hotel(newHotel)
-    await hotel.save();
-
-    //4. return a 201 status
-    res.status(201).send(hotel);
-    }catch(e){
-        console.log("Error creating hotel:",e);
-        res.status(500).json({message:"Something wnet wrong"});
-
-    }
-})
-
-export default router;
+const Hotel = mongoose.model<HotelType>("Hotel", hotelSchema);
+export default Hotel;
 
